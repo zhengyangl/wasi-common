@@ -1,7 +1,7 @@
 #![allow(non_camel_case_types)]
 use crate::sys::host_impl;
 use crate::sys::hostcalls_impl::fs_helpers::*;
-use crate::{host, Error, Result};
+use crate::{wasi, Error, Result};
 use std::fs::File;
 use std::path::{Component, Path};
 
@@ -26,7 +26,7 @@ impl PathGet {
 /// This is a workaround for not having Capsicum support in the OS.
 pub(crate) fn path_get(
     dirfd: &File,
-    dirflags: host::__wasi_lookupflags_t,
+    dirflags: wasi::__wasi_lookupflags_t,
     path: &str,
     needs_final_component: bool,
 ) -> Result<PathGet> {
@@ -108,9 +108,9 @@ pub(crate) fn path_get(
                                 }
                                 Err(e) => {
                                     match e.as_wasi_errno() {
-                                        host::__WASI_ELOOP
-                                        | host::__WASI_EMLINK
-                                        | host::__WASI_ENOTDIR =>
+                                        wasi::__WASI_ELOOP
+                                        | wasi::__WASI_EMLINK
+                                        | wasi::__WASI_ENOTDIR =>
                                         // Check to see if it was a symlink. Linux indicates
                                         // this with ENOTDIR because of the O_DIRECTORY flag.
                                         {
@@ -145,7 +145,7 @@ pub(crate) fn path_get(
 
                             continue;
                         } else if ends_with_slash
-                            || (dirflags & host::__WASI_LOOKUP_SYMLINK_FOLLOW) != 0
+                            || (dirflags & wasi::__WASI_LOOKUP_SYMLINK_FOLLOW) != 0
                         {
                             // if there's a trailing slash, or if `LOOKUP_SYMLINK_FOLLOW` is set, attempt
                             // symlink expansion
@@ -169,12 +169,12 @@ pub(crate) fn path_get(
                                     continue;
                                 }
                                 Err(e) => {
-                                    if e.as_wasi_errno() != host::__WASI_EINVAL
-                                        && e.as_wasi_errno() != host::__WASI_ENOENT
+                                    if e.as_wasi_errno() != wasi::__WASI_EINVAL
+                                        && e.as_wasi_errno() != wasi::__WASI_ENOENT
                                         // this handles the cases when trying to link to
                                         // a destination that already exists, and the target
                                         // path contains a slash
-                                        && e.as_wasi_errno() != host::__WASI_ENOTDIR
+                                        && e.as_wasi_errno() != wasi::__WASI_ENOTDIR
                                     {
                                         return Err(e);
                                     }

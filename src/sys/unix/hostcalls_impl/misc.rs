@@ -2,19 +2,19 @@
 #![allow(unused_unsafe)]
 use crate::memory::*;
 use crate::sys::host_impl;
-use crate::{host, wasm32, Error, Result};
+use crate::{wasi, wasi32, Error, Result};
 use nix::libc::{self, c_int};
 use std::cmp;
 use std::mem::MaybeUninit;
 use std::time::SystemTime;
 
-pub(crate) fn clock_res_get(clock_id: host::__wasi_clockid_t) -> Result<host::__wasi_timestamp_t> {
+pub(crate) fn clock_res_get(clock_id: wasi::__wasi_clockid_t) -> Result<wasi::__wasi_timestamp_t> {
     // convert the supported clocks to the libc types, or return EINVAL
     let clock_id = match clock_id {
-        host::__WASI_CLOCK_REALTIME => libc::CLOCK_REALTIME,
-        host::__WASI_CLOCK_MONOTONIC => libc::CLOCK_MONOTONIC,
-        host::__WASI_CLOCK_PROCESS_CPUTIME_ID => libc::CLOCK_PROCESS_CPUTIME_ID,
-        host::__WASI_CLOCK_THREAD_CPUTIME_ID => libc::CLOCK_THREAD_CPUTIME_ID,
+        wasi::__WASI_CLOCK_REALTIME => libc::CLOCK_REALTIME,
+        wasi::__WASI_CLOCK_MONOTONIC => libc::CLOCK_MONOTONIC,
+        wasi::__WASI_CLOCK_PROCESS_CPUTIME_ID => libc::CLOCK_PROCESS_CPUTIME_ID,
+        wasi::__WASI_CLOCK_THREAD_CPUTIME_ID => libc::CLOCK_THREAD_CPUTIME_ID,
         _ => return Err(Error::EINVAL),
     };
 
@@ -29,9 +29,9 @@ pub(crate) fn clock_res_get(clock_id: host::__wasi_clockid_t) -> Result<host::__
     // convert to nanoseconds, returning EOVERFLOW in case of overflow;
     // this is freelancing a bit from the spec but seems like it'll
     // be an unusual situation to hit
-    (timespec.tv_sec as host::__wasi_timestamp_t)
+    (timespec.tv_sec as wasi::__wasi_timestamp_t)
         .checked_mul(1_000_000_000)
-        .and_then(|sec_ns| sec_ns.checked_add(timespec.tv_nsec as host::__wasi_timestamp_t))
+        .and_then(|sec_ns| sec_ns.checked_add(timespec.tv_nsec as wasi::__wasi_timestamp_t))
         .map_or(Err(Error::EOVERFLOW), |resolution| {
             // a supported clock can never return zero; this case will probably never get hit, but
             // make sure we follow the spec
@@ -43,13 +43,13 @@ pub(crate) fn clock_res_get(clock_id: host::__wasi_clockid_t) -> Result<host::__
         })
 }
 
-pub(crate) fn clock_time_get(clock_id: host::__wasi_clockid_t) -> Result<host::__wasi_timestamp_t> {
+pub(crate) fn clock_time_get(clock_id: wasi::__wasi_clockid_t) -> Result<wasi::__wasi_timestamp_t> {
     // convert the supported clocks to the libc types, or return EINVAL
     let clock_id = match clock_id {
-        host::__WASI_CLOCK_REALTIME => libc::CLOCK_REALTIME,
-        host::__WASI_CLOCK_MONOTONIC => libc::CLOCK_MONOTONIC,
-        host::__WASI_CLOCK_PROCESS_CPUTIME_ID => libc::CLOCK_PROCESS_CPUTIME_ID,
-        host::__WASI_CLOCK_THREAD_CPUTIME_ID => libc::CLOCK_THREAD_CPUTIME_ID,
+        wasi::__WASI_CLOCK_REALTIME => libc::CLOCK_REALTIME,
+        wasi::__WASI_CLOCK_MONOTONIC => libc::CLOCK_MONOTONIC,
+        wasi::__WASI_CLOCK_PROCESS_CPUTIME_ID => libc::CLOCK_PROCESS_CPUTIME_ID,
+        wasi::__WASI_CLOCK_THREAD_CPUTIME_ID => libc::CLOCK_THREAD_CPUTIME_ID,
         _ => return Err(Error::EINVAL),
     };
 
@@ -63,20 +63,20 @@ pub(crate) fn clock_time_get(clock_id: host::__wasi_clockid_t) -> Result<host::_
 
     // convert to nanoseconds, returning EOVERFLOW in case of overflow; this is freelancing a bit
     // from the spec but seems like it'll be an unusual situation to hit
-    (timespec.tv_sec as host::__wasi_timestamp_t)
+    (timespec.tv_sec as wasi::__wasi_timestamp_t)
         .checked_mul(1_000_000_000)
-        .and_then(|sec_ns| sec_ns.checked_add(timespec.tv_nsec as host::__wasi_timestamp_t))
+        .and_then(|sec_ns| sec_ns.checked_add(timespec.tv_nsec as wasi::__wasi_timestamp_t))
         .map_or(Err(Error::EOVERFLOW), Ok)
 }
 
 pub(crate) fn poll_oneoff(
-    input: Vec<Result<host::__wasi_subscription_t>>,
-    output_slice: &mut [wasm32::__wasi_event_t],
-) -> Result<wasm32::size_t> {
+    input: Vec<Result<wasi::__wasi_subscription_t>>,
+    output_slice: &mut [wasi::__wasi_event_t],
+) -> Result<wasi32::size_t> {
     let timeout = input
         .iter()
         .filter_map(|event| match event {
-            Ok(event) if event.type_ == wasm32::__WASI_EVENTTYPE_CLOCK => Some(ClockEventData {
+            Ok(event) if event.type_ == wasi::__WASI_EVENTTYPE_CLOCK => Some(ClockEventData {
                 delay: wasi_clock_to_relative_ns_delay(unsafe { event.u.clock }).ok()? / 1_000_000,
                 userdata: event.userdata,
             }),
@@ -88,8 +88,8 @@ pub(crate) fn poll_oneoff(
         .iter()
         .filter_map(|event| match event {
             Ok(event)
-                if event.type_ == wasm32::__WASI_EVENTTYPE_FD_READ
-                    || event.type_ == wasm32::__WASI_EVENTTYPE_FD_WRITE =>
+                if event.type_ == wasi::__WASI_EVENTTYPE_FD_READ
+                    || event.type_ == wasi::__WASI_EVENTTYPE_FD_WRITE =>
             {
                 Some(FdEventData {
                     fd: unsafe { event.u.fd_readwrite.fd } as c_int,
@@ -108,8 +108,8 @@ pub(crate) fn poll_oneoff(
         .map(|event| {
             let mut flags = nix::poll::PollFlags::empty();
             match event.type_ {
-                wasm32::__WASI_EVENTTYPE_FD_READ => flags.insert(nix::poll::PollFlags::POLLIN),
-                wasm32::__WASI_EVENTTYPE_FD_WRITE => flags.insert(nix::poll::PollFlags::POLLOUT),
+                wasi::__WASI_EVENTTYPE_FD_READ => flags.insert(nix::poll::PollFlags::POLLIN),
+                wasi::__WASI_EVENTTYPE_FD_WRITE => flags.insert(nix::poll::PollFlags::POLLOUT),
                 // An event on a file descriptor can currently only be of type FD_READ or FD_WRITE
                 // Nothing else has been defined in the specification, and these are also the only two
                 // events we filtered before. If we get something else here, the code has a serious bug.
@@ -148,9 +148,9 @@ pub(crate) fn poll_oneoff(
 nix::ioctl_read_bad!(fionread, nix::libc::FIONREAD, c_int);
 
 fn wasi_clock_to_relative_ns_delay(
-    wasi_clock: host::__wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t,
+    wasi_clock: wasi::__wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t,
 ) -> Result<u128> {
-    if wasi_clock.flags != wasm32::__WASI_SUBSCRIPTION_CLOCK_ABSTIME {
+    if wasi_clock.flags != wasi::__WASI_SUBSCRIPTION_CLOCK_ABSTIME {
         return Ok(u128::from(wasi_clock.timeout));
     }
     let now: u128 = SystemTime::now()
@@ -164,30 +164,32 @@ fn wasi_clock_to_relative_ns_delay(
 #[derive(Debug, Copy, Clone)]
 struct ClockEventData {
     delay: u128,
-    userdata: host::__wasi_userdata_t,
+    userdata: wasi::__wasi_userdata_t,
 }
 #[derive(Debug, Copy, Clone)]
 struct FdEventData {
     fd: c_int,
-    type_: host::__wasi_eventtype_t,
-    userdata: host::__wasi_userdata_t,
+    type_: wasi::__wasi_eventtype_t,
+    userdata: wasi::__wasi_userdata_t,
 }
 
 fn poll_oneoff_handle_timeout_event(
-    output_slice: &mut [wasm32::__wasi_event_t],
+    output_slice: &mut [wasi::__wasi_event_t],
     timeout: Option<ClockEventData>,
-) -> wasm32::size_t {
+) -> wasi32::size_t {
     if let Some(ClockEventData { userdata, .. }) = timeout {
-        let output_event = host::__wasi_event_t {
+        let output_event = wasi::__wasi_event_t {
             userdata,
-            type_: wasm32::__WASI_EVENTTYPE_CLOCK,
-            error: wasm32::__WASI_ESUCCESS,
-            u: host::__wasi_event_t___wasi_event_u {
-                fd_readwrite: host::__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t {
+            type_: wasi::__WASI_EVENTTYPE_CLOCK,
+            error: wasi::__WASI_ESUCCESS,
+            u: wasi::__wasi_event_t___wasi_event_u {
+                fd_readwrite: wasi::__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t {
                     nbytes: 0,
                     flags: 0,
+                    __bindgen_padding_0: [0, 0, 0],
                 },
             },
+            __bindgen_padding_0: 0,
         };
         output_slice[0] = enc_event(output_event);
         1
@@ -198,9 +200,9 @@ fn poll_oneoff_handle_timeout_event(
 }
 
 fn poll_oneoff_handle_fd_event<'t>(
-    output_slice: &mut [wasm32::__wasi_event_t],
+    output_slice: &mut [wasi::__wasi_event_t],
     events: impl Iterator<Item = (&'t FdEventData, &'t nix::poll::PollFd)>,
-) -> wasm32::size_t {
+) -> wasi32::size_t {
     let mut output_slice_cur = output_slice.iter_mut();
     let mut revents_count = 0;
     for (fd_event, poll_fd) in events {
@@ -209,62 +211,70 @@ fn poll_oneoff_handle_fd_event<'t>(
             None => continue,
         };
         let mut nbytes = 0;
-        if fd_event.type_ == wasm32::__WASI_EVENTTYPE_FD_READ {
+        if fd_event.type_ == wasi::__WASI_EVENTTYPE_FD_READ {
             let _ = unsafe { fionread(fd_event.fd, &mut nbytes) };
         }
         let output_event = if revents.contains(nix::poll::PollFlags::POLLNVAL) {
-            host::__wasi_event_t {
+            wasi::__wasi_event_t {
                 userdata: fd_event.userdata,
                 type_: fd_event.type_,
-                error: wasm32::__WASI_EBADF,
-                u: host::__wasi_event_t___wasi_event_u {
+                error: wasi::__WASI_EBADF,
+                u: wasi::__wasi_event_t___wasi_event_u {
                     fd_readwrite:
-                        host::__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t {
+                        wasi::__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t {
                             nbytes: 0,
-                            flags: wasm32::__WASI_EVENT_FD_READWRITE_HANGUP,
+                            flags: wasi::__WASI_EVENT_FD_READWRITE_HANGUP,
+                            __bindgen_padding_0: [0, 0, 0],
                         },
                 },
+                __bindgen_padding_0: 0,
             }
         } else if revents.contains(nix::poll::PollFlags::POLLERR) {
-            host::__wasi_event_t {
+            wasi::__wasi_event_t {
                 userdata: fd_event.userdata,
                 type_: fd_event.type_,
-                error: wasm32::__WASI_EIO,
-                u: host::__wasi_event_t___wasi_event_u {
+                error: wasi::__WASI_EIO,
+                u: wasi::__wasi_event_t___wasi_event_u {
                     fd_readwrite:
-                        host::__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t {
+                        wasi::__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t {
                             nbytes: 0,
-                            flags: wasm32::__WASI_EVENT_FD_READWRITE_HANGUP,
+                            flags: wasi::__WASI_EVENT_FD_READWRITE_HANGUP,
+                            __bindgen_padding_0: [0, 0, 0],
                         },
                 },
+                __bindgen_padding_0: 0,
             }
         } else if revents.contains(nix::poll::PollFlags::POLLHUP) {
-            host::__wasi_event_t {
+            wasi::__wasi_event_t {
                 userdata: fd_event.userdata,
                 type_: fd_event.type_,
-                error: wasm32::__WASI_ESUCCESS,
-                u: host::__wasi_event_t___wasi_event_u {
+                error: wasi::__WASI_ESUCCESS,
+                u: wasi::__wasi_event_t___wasi_event_u {
                     fd_readwrite:
-                        host::__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t {
+                        wasi::__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t {
                             nbytes: 0,
-                            flags: wasm32::__WASI_EVENT_FD_READWRITE_HANGUP,
+                            flags: wasi::__WASI_EVENT_FD_READWRITE_HANGUP,
+                            __bindgen_padding_0: [0, 0, 0],
                         },
                 },
+                __bindgen_padding_0: 0,
             }
         } else if revents.contains(nix::poll::PollFlags::POLLIN)
             | revents.contains(nix::poll::PollFlags::POLLOUT)
         {
-            host::__wasi_event_t {
+            wasi::__wasi_event_t {
                 userdata: fd_event.userdata,
                 type_: fd_event.type_,
-                error: wasm32::__WASI_ESUCCESS,
-                u: host::__wasi_event_t___wasi_event_u {
+                error: wasi::__WASI_ESUCCESS,
+                u: wasi::__wasi_event_t___wasi_event_u {
                     fd_readwrite:
-                        host::__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t {
-                            nbytes: nbytes as host::__wasi_filesize_t,
+                        wasi::__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t {
+                            nbytes: nbytes as wasi::__wasi_filesize_t,
                             flags: 0,
+                            __bindgen_padding_0: [0, 0, 0],
                         },
                 },
+                __bindgen_padding_0: 0,
             }
         } else {
             continue;
