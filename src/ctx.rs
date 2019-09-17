@@ -1,6 +1,6 @@
 use crate::fdentry::FdEntry;
 use crate::sys::dev_null;
-use crate::{host, Error, Result};
+use crate::{wasi, Error, Result};
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::env;
@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 /// A builder allowing customizable construction of `WasiCtx` instances.
 pub struct WasiCtxBuilder {
-    fds: HashMap<host::__wasi_fd_t, FdEntry>,
+    fds: HashMap<wasi::__wasi_fd_t, FdEntry>,
     preopens: Vec<(PathBuf, File)>,
     args: Vec<CString>,
     env: HashMap<CString, CString>,
@@ -160,7 +160,7 @@ impl WasiCtxBuilder {
 
 #[derive(Debug)]
 pub struct WasiCtx {
-    pub(crate) fds: HashMap<host::__wasi_fd_t, FdEntry>,
+    pub(crate) fds: HashMap<wasi::__wasi_fd_t, FdEntry>,
     pub(crate) args: Vec<CString>,
     pub(crate) env: Vec<CString>,
 }
@@ -181,15 +181,15 @@ impl WasiCtx {
             .and_then(|ctx| ctx.build())
     }
 
-    pub(crate) unsafe fn contains_fd_entry(&self, fd: host::__wasi_fd_t) -> bool {
+    pub(crate) unsafe fn contains_fd_entry(&self, fd: wasi::__wasi_fd_t) -> bool {
         self.fds.contains_key(&fd)
     }
 
     pub(crate) unsafe fn get_fd_entry(
         &self,
-        fd: host::__wasi_fd_t,
-        rights_base: host::__wasi_rights_t,
-        rights_inheriting: host::__wasi_rights_t,
+        fd: wasi::__wasi_fd_t,
+        rights_base: wasi::__wasi_rights_t,
+        rights_inheriting: wasi::__wasi_rights_t,
     ) -> Result<&FdEntry> {
         if let Some(fe) = self.fds.get(&fd) {
             Self::validate_rights(fe, rights_base, rights_inheriting).and(Ok(fe))
@@ -200,9 +200,9 @@ impl WasiCtx {
 
     pub(crate) unsafe fn get_fd_entry_mut(
         &mut self,
-        fd: host::__wasi_fd_t,
-        rights_base: host::__wasi_rights_t,
-        rights_inheriting: host::__wasi_rights_t,
+        fd: wasi::__wasi_fd_t,
+        rights_base: wasi::__wasi_rights_t,
+        rights_inheriting: wasi::__wasi_rights_t,
     ) -> Result<&mut FdEntry> {
         if let Some(fe) = self.fds.get_mut(&fd) {
             Self::validate_rights(fe, rights_base, rights_inheriting).and(Ok(fe))
@@ -213,8 +213,8 @@ impl WasiCtx {
 
     fn validate_rights(
         fe: &FdEntry,
-        rights_base: host::__wasi_rights_t,
-        rights_inheriting: host::__wasi_rights_t,
+        rights_base: wasi::__wasi_rights_t,
+        rights_inheriting: wasi::__wasi_rights_t,
     ) -> Result<()> {
         if !fe.rights_base & rights_base != 0 || !fe.rights_inheriting & rights_inheriting != 0 {
             Err(Error::ENOTCAPABLE)
@@ -223,7 +223,7 @@ impl WasiCtx {
         }
     }
 
-    pub(crate) fn insert_fd_entry(&mut self, fe: FdEntry) -> Result<host::__wasi_fd_t> {
+    pub(crate) fn insert_fd_entry(&mut self, fe: FdEntry) -> Result<wasi::__wasi_fd_t> {
         // never insert where stdio handles usually are
         let mut fd = 3;
         while self.fds.contains_key(&fd) {

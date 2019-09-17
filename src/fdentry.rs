@@ -1,5 +1,5 @@
 use crate::sys::fdentry_impl::{determine_type_and_access_rights, OsFile};
-use crate::{host, Error, Result};
+use crate::{wasi, Error, Result};
 use std::path::PathBuf;
 use std::{fs, io};
 
@@ -60,7 +60,7 @@ impl Descriptor {
 
 #[derive(Debug)]
 pub(crate) struct FdObject {
-    pub(crate) file_type: host::__wasi_filetype_t,
+    pub(crate) file_type: wasi::__wasi_filetype_t,
     pub(crate) descriptor: Descriptor,
     // TODO: directories
 }
@@ -68,8 +68,8 @@ pub(crate) struct FdObject {
 #[derive(Debug)]
 pub(crate) struct FdEntry {
     pub(crate) fd_object: FdObject,
-    pub(crate) rights_base: host::__wasi_rights_t,
-    pub(crate) rights_inheriting: host::__wasi_rights_t,
+    pub(crate) rights_base: wasi::__wasi_rights_t,
+    pub(crate) rights_inheriting: wasi::__wasi_rights_t,
     pub(crate) preopen_path: Option<PathBuf>,
 }
 

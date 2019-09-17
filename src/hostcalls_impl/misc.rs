@@ -2,15 +2,15 @@
 use crate::ctx::WasiCtx;
 use crate::memory::*;
 use crate::sys::hostcalls_impl;
-use crate::{wasm32, Error, Result};
+use crate::{wasi, wasi32, Error, Result};
 use log::trace;
 use std::convert::TryFrom;
 
 pub(crate) fn args_get(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
-    argv_ptr: wasm32::uintptr_t,
-    argv_buf: wasm32::uintptr_t,
+    argv_ptr: wasi32::uintptr_t,
+    argv_buf: wasi32::uintptr_t,
 ) -> Result<()> {
     trace!(
         "args_get(argv_ptr={:#x?}, argv_buf={:#x?})",
@@ -29,7 +29,7 @@ pub(crate) fn args_get(
 
         argv.push(arg_ptr);
 
-        let len = wasm32::uintptr_t::try_from(arg_bytes.len())?;
+        let len = wasi32::uintptr_t::try_from(arg_bytes.len())?;
         argv_buf_offset = argv_buf_offset.checked_add(len).ok_or(Error::EOVERFLOW)?;
     }
 
@@ -39,8 +39,8 @@ pub(crate) fn args_get(
 pub(crate) fn args_sizes_get(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
-    argc_ptr: wasm32::uintptr_t,
-    argv_buf_size_ptr: wasm32::uintptr_t,
+    argc_ptr: wasi32::uintptr_t,
+    argv_buf_size_ptr: wasi32::uintptr_t,
 ) -> Result<()> {
     trace!(
         "args_sizes_get(argc_ptr={:#x?}, argv_buf_size_ptr={:#x?})",
@@ -67,8 +67,8 @@ pub(crate) fn args_sizes_get(
 pub(crate) fn environ_get(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
-    environ_ptr: wasm32::uintptr_t,
-    environ_buf: wasm32::uintptr_t,
+    environ_ptr: wasi32::uintptr_t,
+    environ_buf: wasi32::uintptr_t,
 ) -> Result<()> {
     trace!(
         "environ_get(environ_ptr={:#x?}, environ_buf={:#x?})",
@@ -87,7 +87,7 @@ pub(crate) fn environ_get(
 
         environ.push(env_ptr);
 
-        let len = wasm32::uintptr_t::try_from(env_bytes.len())?;
+        let len = wasi32::uintptr_t::try_from(env_bytes.len())?;
         environ_buf_offset = environ_buf_offset
             .checked_add(len)
             .ok_or(Error::EOVERFLOW)?;
@@ -99,8 +99,8 @@ pub(crate) fn environ_get(
 pub(crate) fn environ_sizes_get(
     wasi_ctx: &WasiCtx,
     memory: &mut [u8],
-    environ_count_ptr: wasm32::uintptr_t,
-    environ_size_ptr: wasm32::uintptr_t,
+    environ_count_ptr: wasi32::uintptr_t,
+    environ_size_ptr: wasi32::uintptr_t,
 ) -> Result<()> {
     trace!(
         "environ_sizes_get(environ_count_ptr={:#x?}, environ_size_ptr={:#x?})",
@@ -128,8 +128,8 @@ pub(crate) fn environ_sizes_get(
 
 pub(crate) fn random_get(
     memory: &mut [u8],
-    buf_ptr: wasm32::uintptr_t,
-    buf_len: wasm32::size_t,
+    buf_ptr: wasi32::uintptr_t,
+    buf_len: wasi32::size_t,
 ) -> Result<()> {
     use rand::{thread_rng, RngCore};
 
@@ -144,8 +144,8 @@ pub(crate) fn random_get(
 
 pub(crate) fn clock_res_get(
     memory: &mut [u8],
-    clock_id: wasm32::__wasi_clockid_t,
-    resolution_ptr: wasm32::uintptr_t,
+    clock_id: wasi::__wasi_clockid_t,
+    resolution_ptr: wasi32::uintptr_t,
 ) -> Result<()> {
     trace!(
         "clock_res_get(clock_id={:?}, resolution_ptr={:#x?})",
@@ -163,9 +163,9 @@ pub(crate) fn clock_res_get(
 
 pub(crate) fn clock_time_get(
     memory: &mut [u8],
-    clock_id: wasm32::__wasi_clockid_t,
-    precision: wasm32::__wasi_timestamp_t,
-    time_ptr: wasm32::uintptr_t,
+    clock_id: wasi::__wasi_clockid_t,
+    precision: wasi::__wasi_timestamp_t,
+    time_ptr: wasi32::uintptr_t,
 ) -> Result<()> {
     trace!(
         "clock_time_get(clock_id={:?}, precision={:?}, time_ptr={:#x?})",
@@ -185,10 +185,10 @@ pub(crate) fn clock_time_get(
 pub(crate) fn poll_oneoff(
     _wasi_ctx: &WasiCtx,
     memory: &mut [u8],
-    input: wasm32::uintptr_t,
-    output: wasm32::uintptr_t,
-    nsubscriptions: wasm32::size_t,
-    nevents: wasm32::uintptr_t,
+    input: wasi32::uintptr_t,
+    output: wasi32::uintptr_t,
+    nsubscriptions: wasi32::size_t,
+    nevents: wasi32::uintptr_t,
 ) -> Result<()> {
     trace!(
         "poll_oneoff(input={:#x?}, output={:#x?}, nsubscriptions={}, nevents={:#x?})",
@@ -198,15 +198,15 @@ pub(crate) fn poll_oneoff(
         nevents,
     );
 
-    if u64::from(nsubscriptions) > wasm32::__wasi_filesize_t::max_value() {
+    if u64::from(nsubscriptions) > wasi::__wasi_filesize_t::max_value() {
         return Err(Error::EINVAL);
     }
 
     enc_pointee(memory, nevents, 0)?;
 
-    let input_slice = dec_slice_of::<wasm32::__wasi_subscription_t>(memory, input, nsubscriptions)?;
+    let input_slice = dec_slice_of::<wasi::__wasi_subscription_t>(memory, input, nsubscriptions)?;
     let input: Vec<_> = input_slice.iter().map(dec_subscription).collect();
-    let output_slice = dec_slice_of_mut::<wasm32::__wasi_event_t>(memory, output, nsubscriptions)?;
+    let output_slice = dec_slice_of_mut::<wasi::__wasi_event_t>(memory, output, nsubscriptions)?;
     let events_count = hostcalls_impl::poll_oneoff(input, output_slice)?;
 
     trace!("     | *nevents={:?}", events_count);
