@@ -76,7 +76,7 @@ pub(crate) fn poll_oneoff(
     let timeout = input
         .iter()
         .filter_map(|event| match event {
-            Ok(event) if event.type_ == wasi::__WASI_EVENTTYPE_CLOCK => Some(ClockEventData {
+            Ok(event) if event.r#type == wasi::__WASI_EVENTTYPE_CLOCK => Some(ClockEventData {
                 delay: wasi_clock_to_relative_ns_delay(unsafe { event.u.clock }).ok()? / 1_000_000,
                 userdata: event.userdata,
             }),
@@ -88,12 +88,12 @@ pub(crate) fn poll_oneoff(
         .iter()
         .filter_map(|event| match event {
             Ok(event)
-                if event.type_ == wasi::__WASI_EVENTTYPE_FD_READ
-                    || event.type_ == wasi::__WASI_EVENTTYPE_FD_WRITE =>
+                if event.r#type == wasi::__WASI_EVENTTYPE_FD_READ
+                    || event.r#type == wasi::__WASI_EVENTTYPE_FD_WRITE =>
             {
                 Some(FdEventData {
-                    fd: unsafe { event.u.fd_readwrite.fd } as c_int,
-                    type_: event.type_,
+                    fd: unsafe { event.u.fd_readwrite.file_descriptor } as c_int,
+                    r#type: event.r#type,
                     userdata: event.userdata,
                 })
             }
@@ -107,7 +107,7 @@ pub(crate) fn poll_oneoff(
         .iter()
         .map(|event| {
             let mut flags = nix::poll::PollFlags::empty();
-            match event.type_ {
+            match event.r#type {
                 wasi::__WASI_EVENTTYPE_FD_READ => flags.insert(nix::poll::PollFlags::POLLIN),
                 wasi::__WASI_EVENTTYPE_FD_WRITE => flags.insert(nix::poll::PollFlags::POLLOUT),
                 // An event on a file descriptor can currently only be of type FD_READ or FD_WRITE
@@ -147,9 +147,7 @@ pub(crate) fn poll_oneoff(
 // define the `fionread()` function, equivalent to `ioctl(fd, FIONREAD, *bytes)`
 nix::ioctl_read_bad!(fionread, nix::libc::FIONREAD, c_int);
 
-fn wasi_clock_to_relative_ns_delay(
-    wasi_clock: wasi::__wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t,
-) -> Result<u128> {
+fn wasi_clock_to_relative_ns_delay(wasi_clock: wasi::__wasi_subscription_clock_t) -> Result<u128> {
     if wasi_clock.flags != wasi::__WASI_SUBSCRIPTION_CLOCK_ABSTIME {
         return Ok(u128::from(wasi_clock.timeout));
     }
@@ -169,7 +167,7 @@ struct ClockEventData {
 #[derive(Debug, Copy, Clone)]
 struct FdEventData {
     fd: c_int,
-    type_: wasi::__wasi_eventtype_t,
+    r#type: wasi::__wasi_eventtype_t,
     userdata: wasi::__wasi_userdata_t,
 }
 
@@ -180,16 +178,14 @@ fn poll_oneoff_handle_timeout_event(
     if let Some(ClockEventData { userdata, .. }) = timeout {
         let output_event = wasi::__wasi_event_t {
             userdata,
-            type_: wasi::__WASI_EVENTTYPE_CLOCK,
+            r#type: wasi::__WASI_EVENTTYPE_CLOCK,
             error: wasi::__WASI_ESUCCESS,
-            u: wasi::__wasi_event_t___wasi_event_u {
-                fd_readwrite: wasi::__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t {
+            u: wasi::__wasi_event_u {
+                fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
                     nbytes: 0,
                     flags: 0,
-                    __bindgen_padding_0: [0, 0, 0],
                 },
             },
-            __bindgen_padding_0: 0,
         };
         output_slice[0] = enc_event(output_event);
         1
@@ -211,70 +207,58 @@ fn poll_oneoff_handle_fd_event<'t>(
             None => continue,
         };
         let mut nbytes = 0;
-        if fd_event.type_ == wasi::__WASI_EVENTTYPE_FD_READ {
+        if fd_event.r#type == wasi::__WASI_EVENTTYPE_FD_READ {
             let _ = unsafe { fionread(fd_event.fd, &mut nbytes) };
         }
         let output_event = if revents.contains(nix::poll::PollFlags::POLLNVAL) {
             wasi::__wasi_event_t {
                 userdata: fd_event.userdata,
-                type_: fd_event.type_,
+                r#type: fd_event.r#type,
                 error: wasi::__WASI_EBADF,
-                u: wasi::__wasi_event_t___wasi_event_u {
-                    fd_readwrite:
-                        wasi::__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t {
-                            nbytes: 0,
-                            flags: wasi::__WASI_EVENT_FD_READWRITE_HANGUP,
-                            __bindgen_padding_0: [0, 0, 0],
-                        },
+                u: wasi::__wasi_event_u {
+                    fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
+                        nbytes: 0,
+                        flags: wasi::__WASI_EVENT_FD_READWRITE_HANGUP,
+                    },
                 },
-                __bindgen_padding_0: 0,
             }
         } else if revents.contains(nix::poll::PollFlags::POLLERR) {
             wasi::__wasi_event_t {
                 userdata: fd_event.userdata,
-                type_: fd_event.type_,
+                r#type: fd_event.r#type,
                 error: wasi::__WASI_EIO,
-                u: wasi::__wasi_event_t___wasi_event_u {
-                    fd_readwrite:
-                        wasi::__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t {
-                            nbytes: 0,
-                            flags: wasi::__WASI_EVENT_FD_READWRITE_HANGUP,
-                            __bindgen_padding_0: [0, 0, 0],
-                        },
+                u: wasi::__wasi_event_u {
+                    fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
+                        nbytes: 0,
+                        flags: wasi::__WASI_EVENT_FD_READWRITE_HANGUP,
+                    },
                 },
-                __bindgen_padding_0: 0,
             }
         } else if revents.contains(nix::poll::PollFlags::POLLHUP) {
             wasi::__wasi_event_t {
                 userdata: fd_event.userdata,
-                type_: fd_event.type_,
+                r#type: fd_event.r#type,
                 error: wasi::__WASI_ESUCCESS,
-                u: wasi::__wasi_event_t___wasi_event_u {
-                    fd_readwrite:
-                        wasi::__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t {
-                            nbytes: 0,
-                            flags: wasi::__WASI_EVENT_FD_READWRITE_HANGUP,
-                            __bindgen_padding_0: [0, 0, 0],
-                        },
+                u: wasi::__wasi_event_u {
+                    fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
+                        nbytes: 0,
+                        flags: wasi::__WASI_EVENT_FD_READWRITE_HANGUP,
+                    },
                 },
-                __bindgen_padding_0: 0,
             }
         } else if revents.contains(nix::poll::PollFlags::POLLIN)
             | revents.contains(nix::poll::PollFlags::POLLOUT)
         {
             wasi::__wasi_event_t {
                 userdata: fd_event.userdata,
-                type_: fd_event.type_,
+                r#type: fd_event.r#type,
                 error: wasi::__WASI_ESUCCESS,
-                u: wasi::__wasi_event_t___wasi_event_u {
-                    fd_readwrite:
-                        wasi::__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t {
-                            nbytes: nbytes as wasi::__wasi_filesize_t,
-                            flags: 0,
-                            __bindgen_padding_0: [0, 0, 0],
-                        },
+                u: wasi::__wasi_event_u {
+                    fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
+                        nbytes: nbytes as wasi::__wasi_filesize_t,
+                        flags: 0,
+                    },
                 },
-                __bindgen_padding_0: 0,
             }
         } else {
             continue;

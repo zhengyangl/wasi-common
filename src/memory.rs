@@ -146,7 +146,7 @@ pub(crate) fn dec_ciovec(
 ) -> Result<host::__wasi_ciovec_t> {
     let len = dec_usize(ciovec.buf_len);
     Ok(host::__wasi_ciovec_t {
-        buf: dec_ptr(memory, ciovec.buf, len)? as *const host::void,
+        buf: dec_ptr(memory, ciovec.buf, len)? as *const u8,
         buf_len: len,
     })
 }
@@ -166,7 +166,7 @@ pub(crate) fn dec_iovec(
 ) -> Result<host::__wasi_iovec_t> {
     let len = dec_usize(iovec.buf_len);
     Ok(host::__wasi_iovec_t {
-        buf: dec_ptr(memory, iovec.buf, len)? as *mut host::void,
+        buf: dec_ptr(memory, iovec.buf, len)? as *mut u8,
         buf_len: len,
     })
 }
@@ -286,7 +286,6 @@ pub(crate) fn dec_fdstat(fdstat: wasi::__wasi_fdstat_t) -> wasi::__wasi_fdstat_t
         fs_flags: dec_fdflags(fdstat.fs_flags),
         fs_rights_base: dec_rights(fdstat.fs_rights_base),
         fs_rights_inheriting: dec_rights(fdstat.fs_rights_inheriting),
-        __bindgen_padding_0: 0,
     }
 }
 
@@ -301,7 +300,6 @@ pub(crate) fn enc_fdstat(fdstat: wasi::__wasi_fdstat_t) -> wasi::__wasi_fdstat_t
     wasi::__wasi_fdstat_t {
         fs_filetype: enc_filetype(fdstat.fs_filetype),
         fs_flags: enc_fdflags(fdstat.fs_flags),
-        __bindgen_padding_0: 0,
         fs_rights_base: enc_rights(fdstat.fs_rights_base),
         fs_rights_inheriting: enc_rights(fdstat.fs_rights_inheriting),
     }
@@ -359,8 +357,8 @@ dec_enc_scalar!(
 pub(crate) fn dec_prestat(prestat: wasi32::__wasi_prestat_t) -> Result<host::__wasi_prestat_t> {
     match prestat.pr_type {
         wasi::__WASI_PREOPENTYPE_DIR => {
-            let u = host::__wasi_prestat_t___wasi_prestat_u {
-                dir: host::__wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t {
+            let u = host::__wasi_prestat_u {
+                dir: host::__wasi_prestat_dir {
                     pr_name_len: dec_usize(unsafe { prestat.u.dir.pr_name_len }),
                 },
             };
@@ -383,8 +381,8 @@ pub(crate) fn dec_prestat_byref(
 pub(crate) fn enc_prestat(prestat: host::__wasi_prestat_t) -> Result<wasi32::__wasi_prestat_t> {
     match prestat.pr_type {
         wasi::__WASI_PREOPENTYPE_DIR => {
-            let u = wasi32::__wasi_prestat_t___wasi_prestat_u {
-                dir: wasi32::__wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t {
+            let u = wasi32::__wasi_prestat_u {
+                dir: wasi32::__wasi_prestat_dir {
                     pr_name_len: enc_usize(unsafe { prestat.u.dir.pr_name_len }),
                 },
             };
@@ -490,34 +488,33 @@ pub(crate) fn dec_subscription(
     subscription: &wasi::__wasi_subscription_t,
 ) -> Result<wasi::__wasi_subscription_t> {
     let userdata = dec_userdata(subscription.userdata);
-    let type_ = dec_eventtype(subscription.type_);
+    let r#type = dec_eventtype(subscription.r#type);
     let u_orig = subscription.u;
-    let u = match type_ {
-        wasi::__WASI_EVENTTYPE_CLOCK => wasi::__wasi_subscription_t___wasi_subscription_u {
+    let u = match r#type {
+        wasi::__WASI_EVENTTYPE_CLOCK => wasi::__wasi_subscription_u {
             clock: unsafe {
-                wasi::__wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_clock_t {
+                wasi::__wasi_subscription_clock_t {
                     identifier: dec_userdata(u_orig.clock.identifier),
                     clock_id: dec_clockid(u_orig.clock.clock_id),
                     timeout: dec_timestamp(u_orig.clock.timeout),
                     precision: dec_timestamp(u_orig.clock.precision),
                     flags: dec_subclockflags(u_orig.clock.flags),
-                    __bindgen_padding_0: 0,
-                    __bindgen_padding_1: [0,0,0],
                 }
             },
         },
-        wasi::__WASI_EVENTTYPE_FD_READ | wasi::__WASI_EVENTTYPE_FD_WRITE => wasi::__wasi_subscription_t___wasi_subscription_u {
-            fd_readwrite:  wasi::__wasi_subscription_t___wasi_subscription_u___wasi_subscription_u_fd_readwrite_t {
-                fd: dec_fd(unsafe{u_orig.fd_readwrite.fd})
+        wasi::__WASI_EVENTTYPE_FD_READ | wasi::__WASI_EVENTTYPE_FD_WRITE => {
+            wasi::__wasi_subscription_u {
+                fd_readwrite: wasi::__wasi_subscription_fd_readwrite_t {
+                    file_descriptor: dec_fd(unsafe { u_orig.fd_readwrite.file_descriptor }),
+                },
             }
-        },
-        _  => return Err(Error::EINVAL)
+        }
+        _ => return Err(Error::EINVAL),
     };
     Ok(wasi::__wasi_subscription_t {
         userdata,
-        type_,
+        r#type,
         u,
-        __bindgen_padding_0: 0,
     })
 }
 
@@ -525,16 +522,14 @@ pub(crate) fn enc_event(event: wasi::__wasi_event_t) -> wasi::__wasi_event_t {
     let fd_readwrite = unsafe { event.u.fd_readwrite };
     wasi::__wasi_event_t {
         userdata: enc_userdata(event.userdata),
-        type_: enc_eventtype(event.type_),
+        r#type: enc_eventtype(event.r#type),
         error: enc_errno(event.error),
-        u: wasi::__wasi_event_t___wasi_event_u {
-            fd_readwrite: wasi::__wasi_event_t___wasi_event_u___wasi_event_u_fd_readwrite_t {
+        u: wasi::__wasi_event_u {
+            fd_readwrite: wasi::__wasi_event_fd_readwrite_t {
                 nbytes: enc_filesize(fd_readwrite.nbytes),
                 flags: enc_eventrwflags(fd_readwrite.flags),
-                __bindgen_padding_0: [0; 3],
             },
         },
-        __bindgen_padding_0: 0,
     }
 }
 

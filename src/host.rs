@@ -3,45 +3,13 @@
 
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
+
 use std::{io, slice};
+use wig::witx_host_types;
 
 use crate::wasi::*;
 
-pub(crate) type void = ::std::os::raw::c_void;
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct __wasi_prestat_t {
-    pub pr_type: __wasi_preopentype_t,
-    pub u: __wasi_prestat_t___wasi_prestat_u,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub union __wasi_prestat_t___wasi_prestat_u {
-    pub dir: __wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t,
-    _bindgen_union_align: u64,
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct __wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t {
-    pub pr_name_len: usize,
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct __wasi_ciovec_t {
-    pub buf: *const void,
-    pub buf_len: usize,
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct __wasi_iovec_t {
-    pub buf: *mut void,
-    pub buf_len: usize,
-}
+witx_host_types!("unstable" "wasi_unstable_preview0");
 
 #[allow(unused)]
 pub unsafe fn ciovec_to_host(ciovec: &__wasi_ciovec_t) -> io::IoSlice {
@@ -105,30 +73,23 @@ mod test {
     #[test]
     fn bindgen_test_layout___wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t() {
         assert_eq!(
-            ::std::mem::size_of::<__wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t>(),
+            ::std::mem::size_of::<__wasi_prestat_dir>(),
             8usize,
-            concat!(
-                "Size of: ",
-                stringify!(__wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t)
-            )
+            concat!("Size of: ", stringify!(__wasi_prestat_dir))
         );
         assert_eq!(
-            ::std::mem::align_of::<__wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t>(),
+            ::std::mem::align_of::<__wasi_prestat_dir>(),
             8usize,
-            concat!(
-                "Alignment of ",
-                stringify!(__wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t)
-            )
+            concat!("Alignment of ", stringify!(__wasi_prestat_dir))
         );
         assert_eq!(
             unsafe {
-                &(*(::std::ptr::null::<__wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t>()))
-                    .pr_name_len as *const _ as usize
+                &(*(::std::ptr::null::<__wasi_prestat_dir>())).pr_name_len as *const _ as usize
             },
             0usize,
             concat!(
                 "Offset of field: ",
-                stringify!(__wasi_prestat_t___wasi_prestat_u___wasi_prestat_u_dir_t),
+                stringify!(__wasi_prestat_dir),
                 "::",
                 stringify!(pr_name_len)
             )
@@ -138,27 +99,21 @@ mod test {
     #[test]
     fn bindgen_test_layout___wasi_prestat_t___wasi_prestat_u() {
         assert_eq!(
-            ::std::mem::size_of::<__wasi_prestat_t___wasi_prestat_u>(),
+            ::std::mem::size_of::<__wasi_prestat_u>(),
             8usize,
-            concat!("Size of: ", stringify!(__wasi_prestat_t___wasi_prestat_u))
+            concat!("Size of: ", stringify!(__wasi_prestat_u))
         );
         assert_eq!(
-            ::std::mem::align_of::<__wasi_prestat_t___wasi_prestat_u>(),
+            ::std::mem::align_of::<__wasi_prestat_u>(),
             8usize,
-            concat!(
-                "Alignment of ",
-                stringify!(__wasi_prestat_t___wasi_prestat_u)
-            )
+            concat!("Alignment of ", stringify!(__wasi_prestat_u))
         );
         assert_eq!(
-            unsafe {
-                &(*(::std::ptr::null::<__wasi_prestat_t___wasi_prestat_u>())).dir as *const _
-                    as usize
-            },
+            unsafe { &(*(::std::ptr::null::<__wasi_prestat_u>())).dir as *const _ as usize },
             0usize,
             concat!(
                 "Offset of field: ",
-                stringify!(__wasi_prestat_t___wasi_prestat_u),
+                stringify!(__wasi_prestat_u),
                 "::",
                 stringify!(dir)
             )
