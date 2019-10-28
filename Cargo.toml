@@ -11,7 +11,7 @@ license = "Apache-2.0 WITH LLVM-exception"
 description = "WASI implementation in Rust"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
-repository = "https://github.com/CraneStation/wasi-common"
+repository = "https://github.com/zhengyangl/wasi-common"
 readme = "README.md"
 
 [features]
@@ -36,12 +36,12 @@ winx = { path = "winx", version = "0.4.0" }
 winapi = "0.3"
 
 [dev-dependencies]
-wasmtime-runtime = { git = "https://github.com/cranestation/wasmtime", rev = "e37168a" }
-wasmtime-environ = { git = "https://github.com/cranestation/wasmtime", rev = "e37168a" }
-wasmtime-jit = { git = "https://github.com/cranestation/wasmtime", rev = "e37168a" }
-wasmtime-wasi = { git = "https://github.com/cranestation/wasmtime", rev = "e37168a" }
-wasmtime-api = { git = "https://github.com/cranestation/wasmtime", rev = "e37168a" }
-cranelift-codegen = "0.46.1"
+wasmtime-runtime = { git = "https://github.com/zhengyangl/wasmtime", branch = "profiler" }
+wasmtime-environ = { git = "https://github.com/zhengyangl/wasmtime", branch = "profiler" }
+wasmtime-jit = { git = "https://github.com/zhengyangl/wasmtime", branch = "profiler" }
+wasmtime-wasi = { git = "https://github.com/zhengyangl/wasmtime", branch = "profiler" }
+wasmtime-api = { git = "https://github.com/zhengyangl/wasmtime", branch = "profiler" }
+cranelift-codegen = { git = "https://github.com/zhengyangl/cranelift", branch = "profiler", features = ["enable-serde"] }
 target-lexicon = "0.8.1"
 pretty_env_logger = "0.3.0"
 tempfile = "3.1.0"
